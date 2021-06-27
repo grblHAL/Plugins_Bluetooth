@@ -16,7 +16,7 @@ listing the available pins with the `$pins` system command. E.g. for the [iMXRT1
 [PIN:36,Aux input 0]
 [PIN:30,Aux input 1]
 [PIN:33,Aux input 2]
-[PIN:34,Aux input 3]
+[PIN:35,Aux input 3]
 [PIN:2,X step]
 ...
 ```
