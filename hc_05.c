@@ -258,6 +258,9 @@ bool bluetooth_init (const io_stream_t *stream)
 
         state_port = (--hal.port.num_digital_in);
 
+        if(hal.port.set_pin_description)
+            hal.port.set_pin_description(true, false, state_port, "HC-05 STATE");
+
         on_report_options = grbl.on_report_options;
         grbl.on_report_options = onReportOptions;
 
