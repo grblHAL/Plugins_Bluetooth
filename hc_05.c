@@ -62,12 +62,6 @@ static void hc05_settings_load (void);
 static void hc05_settings_save (void);
 static void select_stream (sys_state_t state);
 
-// Buffer all received characters.
-static bool buffer_all (char c)
-{
-    return false;
-}
-
 static void on_connect (uint8_t port, bool state)
 {
     if((bt_stream.connected = state))
@@ -133,15 +127,16 @@ static void auto_config (sys_state_t state)
 {
     bool ok = false;
     io_stream_t active_stream;
+    enqueue_realtime_command_ptr prev_handler;
 
     if(hal.stream.write != bt_stream.write)
         hal.stream.write("Attempting to configure HC-05 module..." ASCII_EOL);
 
-    memcpy(&active_stream, &hal.stream, sizeof(io_stream_t));   // Save current stream pointers,
-    hal.stream.enqueue_realtime_command = buffer_all;           // stop core real-time command handling.
+    memcpy(&active_stream, &hal.stream, sizeof(io_stream_t));               // Save current stream pointers,
+    prev_handler = hal.stream.set_enqueue_rt_handler(stream_buffer_all);    // stop core real-time command handling.
 
     bt_stream.set_baud_rate(38400);
-    bt_stream.enqueue_realtime_command = buffer_all;
+    bt_stream.set_enqueue_rt_handler(stream_buffer_all);
 
     if(send_command("AT" ASCII_EOL)) {
         ok = send_command("AT+UART=115200,1,0" ASCII_EOL);
@@ -150,7 +145,7 @@ static void auto_config (sys_state_t state)
     }
 
     memcpy(&hal.stream, &active_stream, sizeof(io_stream_t));   // Restore current stream pointers.
-    bt_stream.enqueue_realtime_command = hal.stream.enqueue_realtime_command;
+    bt_stream.set_enqueue_rt_handler(prev_handler);
 
     bt_stream.set_baud_rate(115200);
 
@@ -245,7 +240,7 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        hal.stream.write("[PLUGIN:Bluetooth HC-05 v0.01]" ASCII_EOL);
+        hal.stream.write("[PLUGIN:Bluetooth HC-05 v0.02]" ASCII_EOL);
 }
 
 bool bluetooth_init (const io_stream_t *stream)
