@@ -82,8 +82,8 @@ void select_stream (sys_state_t state)
         bt_stream.set_baud_rate(115200);
 
         if(bt_stream.write != hal.stream.write) {
-            if(hal.stream.disable)
-                hal.stream.disable(true);
+            if(hal.stream.disable_rx)
+                hal.stream.disable_rx(true);
             hal.stream_select(&bt_stream);
         }
     }
@@ -240,7 +240,7 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        hal.stream.write("[PLUGIN:Bluetooth HC-05 v0.02]" ASCII_EOL);
+        hal.stream.write("[PLUGIN:Bluetooth HC-05 v0.03]" ASCII_EOL);
 }
 
 bool bluetooth_init (const io_stream_t *stream)
