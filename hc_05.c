@@ -35,7 +35,7 @@
 #include "grbl/nvs_buffer.h"
 #endif
 
-#include <bluetooth/bluetooth.h>
+#include "bluetooth.h"
 
 typedef union {
     uint8_t value;
@@ -240,7 +240,7 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        hal.stream.write("[PLUGIN:Bluetooth HC-05 v0.03]" ASCII_EOL);
+        hal.stream.write("[PLUGIN:Bluetooth HC-05 v0.04]" ASCII_EOL);
 }
 
 bool bluetooth_init (const io_stream_t *stream)
@@ -255,6 +255,11 @@ bool bluetooth_init (const io_stream_t *stream)
 
         if(hal.port.set_pin_description)
             hal.port.set_pin_description(true, false, state_port, "HC-05 STATE");
+
+        if(hal.periph_port.set_pin_description) {
+            hal.periph_port.set_pin_description(Output_TX, stream->instance == 0 ? PinGroup_UART : PinGroup_UART2, "Bluetooth");
+            hal.periph_port.set_pin_description(Input_RX, stream->instance == 0 ? PinGroup_UART : PinGroup_UART2, "Bluetooth");
+        }
 
         on_report_options = grbl.on_report_options;
         grbl.on_report_options = onReportOptions;
