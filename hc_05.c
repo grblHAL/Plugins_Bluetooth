@@ -145,7 +145,7 @@ static void auto_config (sys_state_t state)
     }
 
     memcpy(&hal.stream, &active_stream, sizeof(io_stream_t));   // Restore current stream pointers.
-    bt_stream.set_enqueue_rt_handler(prev_handler);
+    hal.stream.set_enqueue_rt_handler(prev_handler);
 
     bt_stream.set_baud_rate(115200);
 
@@ -240,32 +240,55 @@ static void onReportOptions (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        hal.stream.write("[PLUGIN:Bluetooth HC-05 v0.04]" ASCII_EOL);
+        hal.stream.write("[PLUGIN:Bluetooth HC-05 v0.05]" ASCII_EOL);
+}
+
+static void warning_msg (uint_fast16_t state)
+{
+    report_message("Bluetooth plugin failed to initialize, no pin for STATE signal!", Message_Warning);
 }
 
 bool bluetooth_init (const io_stream_t *stream)
 {
+    if(hal.port.get_pin_info == NULL || hal.port.claim == NULL)
+        return false;
+
     if(hal.stream_select && stream->set_baud_rate && hal.port.num_digital_in && (nvs_address = nvs_alloc(sizeof(hc05_settings_t)))) {
+
+        bool ok = false;
+        xbar_t *port = NULL;
 
         memcpy(&bt_stream, stream, sizeof(io_stream_t));
         if(hal.stream.write != bt_stream.write)
             bt_stream.type = StreamType_Bluetooth;
 
-        state_port = (--hal.port.num_digital_in);
+        state_port = hal.port.num_digital_in;
 
-        if(hal.port.set_pin_description)
-            hal.port.set_pin_description(true, false, state_port, "HC-05 STATE");
+        // Claim first free aux input pin that supports change interrupt for STATE signal
+        do {
+            state_port--;
+            port = hal.port.get_pin_info(Port_Digital, Port_Input, state_port);
+            if((ok = port && (port->cap.irq_mode & IRQ_Mode_Change))) {
+                hal.port.claim(Port_Digital, Port_Input, &state_port, "HC-05 STATE");
+                break;
+            }
+        } while(state_port);
 
-        if(hal.periph_port.set_pin_description) {
-            hal.periph_port.set_pin_description(Output_TX, stream->instance == 0 ? PinGroup_UART : PinGroup_UART2, "Bluetooth");
-            hal.periph_port.set_pin_description(Input_RX, stream->instance == 0 ? PinGroup_UART : PinGroup_UART2, "Bluetooth");
-        }
+        if(ok) {
 
-        on_report_options = grbl.on_report_options;
-        grbl.on_report_options = onReportOptions;
+            if(hal.periph_port.set_pin_description) {
+                hal.periph_port.set_pin_description(Output_TX, stream->instance == 0 ? PinGroup_UART : PinGroup_UART2, "Bluetooth");
+                hal.periph_port.set_pin_description(Input_RX, stream->instance == 0 ? PinGroup_UART : PinGroup_UART2, "Bluetooth");
+            }
 
-        details.on_get_settings = grbl.on_get_settings;
-        grbl.on_get_settings = on_get_settings;
+            on_report_options = grbl.on_report_options;
+            grbl.on_report_options = onReportOptions;
+
+            details.on_get_settings = grbl.on_get_settings;
+            grbl.on_get_settings = on_get_settings;
+
+        } else // No aux pin found
+            protocol_enqueue_rt_command(warning_msg);
     }
 
     return nvs_address != 0;
