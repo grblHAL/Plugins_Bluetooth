@@ -35,8 +35,6 @@
 #include "grbl/nvs_buffer.h"
 #endif
 
-#include "bluetooth.h"
-
 typedef union {
     uint8_t value;
     struct {
@@ -223,7 +221,7 @@ static const setting_descr_t bluetooth_settings_descr[] = {
 
 #endif
 
-static setting_details_t details = {
+static setting_details_t setting_details = {
     .groups = bluetooth_groups,
     .n_groups = sizeof(bluetooth_groups) / sizeof(setting_group_detail_t),
     .settings = bluetooth_settings,
@@ -240,11 +238,6 @@ static setting_details_t details = {
 static void hc05_settings_save (void)
 {
     hal.nvs.memcpy_to_nvs(nvs_address, (uint8_t *)&hc05_settings, sizeof(hc05_settings_t), true);
-}
-
-static setting_details_t *get_settings (void)
-{
-    return &details;
 }
 
 static void hc05_settings_restore (void)
@@ -274,9 +267,14 @@ static void hc05_settings_restore (void)
     hc05_settings_save();
 }
 
-static void warning_msg (uint_fast16_t state)
+static void warning_pin (uint_fast16_t state)
 {
     report_message("Bluetooth plugin failed to initialize, no pin for STATE signal!", Message_Warning);
+}
+
+static void warning_stream (uint_fast16_t state)
+{
+    report_message("Bluetooth plugin failed to initialize, no serial stream available!", Message_Warning);
 }
 
 static void hc05_settings_load (void)
@@ -297,7 +295,7 @@ static void hc05_settings_load (void)
     if(portinfo && !portinfo->cap.claimed && (portinfo->cap.irq_mode & IRQ_Mode_Change) && ioport_claim(Port_Digital, Port_Input, &state_port, "HC-05 STATE"))
         protocol_enqueue_rt_command(hc05_setup);
     else
-        protocol_enqueue_rt_command(warning_msg);
+        protocol_enqueue_rt_command(warning_pin);
 }
 
 static void report_options (bool newopt)
@@ -305,41 +303,59 @@ static void report_options (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        hal.stream.write("[PLUGIN:Bluetooth HC-05 v0.05]" ASCII_EOL);
+        hal.stream.write("[PLUGIN:Bluetooth HC-05 v0.06]" ASCII_EOL);
 }
 
-bool bluetooth_init (const io_stream_t *stream)
+bool claim_stream (io_stream_properties_t const *stream)
 {
-    bool ok = false;
+    io_stream_t const *claimed = NULL;
 
-    if(!ioport_can_claim_explicit()) {
+    if(stream->type == StreamType_Serial && stream->flags.claimable && !stream->flags.claimed) {
 
-        // Driver does not support explicit pin claiming, claim the highest numbered port instead.
+        if((claimed = stream->claim(115200))) {
 
-        if((ok = (n_ports = hal.port.num_digital_in) > 0 && (nvs_address = nvs_alloc(sizeof(hc05_settings_t)))))
-            hc05_settings.state_port = --hal.port.num_digital_in;
+            memcpy(&bt_stream, claimed, sizeof(io_stream_t));
 
-    } else if((ok = (n_ports = ioports_available(Port_Digital, Port_Input)) > 0 && (nvs_address = nvs_alloc(sizeof(hc05_settings_t)))))
-        strcpy(max_port, uitoa(n_ports - 1));
+            bt_stream.type = StreamType_Bluetooth;
+
+            if(hal.periph_port.set_pin_description) {
+                hal.periph_port.set_pin_description(Output_TX, bt_stream.instance == 0 ? PinGroup_UART : PinGroup_UART2, "Bluetooth");
+                hal.periph_port.set_pin_description(Input_RX, bt_stream.instance == 0 ? PinGroup_UART : PinGroup_UART2, "Bluetooth");
+            }
+        }
+    }
+
+    return claimed != NULL;
+}
+
+bool bluetooth_init (void)
+{
+    bool ok = stream_enumerate_streams(claim_stream);
 
     if(ok) {
 
-        on_report_options = grbl.on_report_options;
-        grbl.on_report_options = report_options;
+        if(!ioport_can_claim_explicit()) {
 
-        details.on_get_settings = grbl.on_get_settings;
-        grbl.on_get_settings = get_settings;
+            // Driver does not support explicit pin claiming, claim the highest numbered port instead.
 
-        memcpy(&bt_stream, stream, sizeof(io_stream_t));
-        if(hal.stream.write != bt_stream.write)
-            bt_stream.type = StreamType_Bluetooth;
+            if((ok = (n_ports = hal.port.num_digital_in) > 0 && (nvs_address = nvs_alloc(sizeof(hc05_settings_t)))))
+                hc05_settings.state_port = --hal.port.num_digital_in;
 
-        if(hal.periph_port.set_pin_description) {
-            hal.periph_port.set_pin_description(Output_TX, stream->instance == 0 ? PinGroup_UART : PinGroup_UART2, "Bluetooth");
-            hal.periph_port.set_pin_description(Input_RX, stream->instance == 0 ? PinGroup_UART : PinGroup_UART2, "Bluetooth");
-        }
+        } else if((ok = (n_ports = ioports_available(Port_Digital, Port_Input)) > 0 && (nvs_address = nvs_alloc(sizeof(hc05_settings_t)))))
+            strcpy(max_port, uitoa(n_ports - 1));
+
+        if(ok) {
+
+            on_report_options = grbl.on_report_options;
+            grbl.on_report_options = report_options;
+
+            settings_register(&setting_details);
+
+        } else
+            protocol_enqueue_rt_command(warning_stream);
+
     } else
-        protocol_enqueue_rt_command(warning_msg);
+        protocol_enqueue_rt_command(warning_pin);
 
     return ok;
 }
