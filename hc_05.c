@@ -352,10 +352,10 @@ bool bluetooth_init (void)
             settings_register(&setting_details);
 
         } else
-            protocol_enqueue_rt_command(warning_stream);
+            protocol_enqueue_rt_command(warning_pin);
 
     } else
-        protocol_enqueue_rt_command(warning_pin);
+        protocol_enqueue_rt_command(warning_stream);
 
     return ok;
 }
