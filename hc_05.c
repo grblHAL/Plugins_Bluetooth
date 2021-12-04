@@ -65,7 +65,7 @@ static char max_port[4];
 
 static void on_connect (uint8_t port, bool state)
 {
-    if((bt_stream.connected = state))
+    if((bt_stream.state.connected = state))
         select_stream(state_get());
     else if(hal.stream.type == StreamType_Bluetooth)
         hal.stream_select(NULL);
@@ -306,7 +306,7 @@ static void report_options (bool newopt)
         hal.stream.write("[PLUGIN:Bluetooth HC-05 v0.06]" ASCII_EOL);
 }
 
-bool claim_stream (io_stream_properties_t const *stream)
+static bool claim_stream (io_stream_properties_t const *stream)
 {
     io_stream_t const *claimed = NULL;
 
