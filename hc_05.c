@@ -68,7 +68,7 @@ static void on_connect (uint8_t port, bool state)
     if((bt_stream.state.connected = state))
         select_stream(state_get());
     else if(hal.stream.type == StreamType_Bluetooth)
-        hal.stream_select(NULL);
+        stream_disconnect(&bt_stream);
 }
 
 static void connected (sys_state_t state)
@@ -85,7 +85,7 @@ void select_stream (sys_state_t state)
         if(bt_stream.write != hal.stream.write) {
             if(hal.stream.disable_rx)
                 hal.stream.disable_rx(true);
-            hal.stream_select(&bt_stream);
+            stream_connect(&bt_stream);
         }
     }
 
