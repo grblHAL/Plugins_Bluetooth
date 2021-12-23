@@ -319,8 +319,8 @@ static bool claim_stream (io_stream_properties_t const *stream)
             bt_stream.type = StreamType_Bluetooth;
 
             if(hal.periph_port.set_pin_description) {
-                hal.periph_port.set_pin_description(Output_TX, bt_stream.instance == 0 ? PinGroup_UART : PinGroup_UART2, "Bluetooth");
-                hal.periph_port.set_pin_description(Input_RX, bt_stream.instance == 0 ? PinGroup_UART : PinGroup_UART2, "Bluetooth");
+                hal.periph_port.set_pin_description(Output_TX, (pin_group_t)(PinGroup_UART + claimed->instance), "Bluetooth");
+                hal.periph_port.set_pin_description(Input_RX, (pin_group_t)(PinGroup_UART + claimed->instance), "Bluetooth");
             }
         }
     }
