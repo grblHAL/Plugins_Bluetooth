@@ -4,7 +4,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2021 Terje Io
+  Copyright (c) 2021-2022 Terje Io
 
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -303,34 +303,25 @@ static void report_options (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        hal.stream.write("[PLUGIN:Bluetooth HC-05 v0.06]" ASCII_EOL);
-}
-
-static bool claim_stream (io_stream_properties_t const *stream)
-{
-    io_stream_t const *claimed = NULL;
-
-    if(stream->type == StreamType_Serial && stream->flags.claimable && !stream->flags.claimed) {
-
-        if((claimed = stream->claim(115200))) {
-
-            memcpy(&bt_stream, claimed, sizeof(io_stream_t));
-
-            bt_stream.type = StreamType_Bluetooth;
-
-            if(hal.periph_port.set_pin_description) {
-                hal.periph_port.set_pin_description(Output_TX, (pin_group_t)(PinGroup_UART + claimed->instance), "Bluetooth");
-                hal.periph_port.set_pin_description(Input_RX, (pin_group_t)(PinGroup_UART + claimed->instance), "Bluetooth");
-            }
-        }
-    }
-
-    return claimed != NULL;
+        hal.stream.write("[PLUGIN:Bluetooth HC-05 v0.07]" ASCII_EOL);
 }
 
 bool bluetooth_init (void)
 {
-    bool ok = stream_enumerate_streams(claim_stream);
+    bool ok;
+    io_stream_t const *stream = stream_open_instance(255, 115200, NULL); // open first free serial port
+
+    if((ok = stream != NULL)) {
+
+        memcpy(&bt_stream, stream, sizeof(io_stream_t));
+
+        bt_stream.type = StreamType_Bluetooth;
+
+        if(hal.periph_port.set_pin_description) {
+            hal.periph_port.set_pin_description(Output_TX, (pin_group_t)(PinGroup_UART + bt_stream.instance), "Bluetooth");
+            hal.periph_port.set_pin_description(Input_RX, (pin_group_t)(PinGroup_UART + bt_stream.instance), "Bluetooth");
+        }
+    }
 
     if(ok) {
 
