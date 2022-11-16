@@ -206,9 +206,9 @@ static const setting_group_detail_t bluetooth_groups [] = {
 };
 
 static const setting_detail_t bluetooth_settings[] = {
-    { Setting_BlueToothInitOK, Group_Bluetooth, "HC-05 init ok", NULL, Format_Bool, NULL, NULL, NULL, Setting_NonCoreFn, set_options, get_options, NULL, false },
-    { Setting_BlueToothDeviceName, Group_Bluetooth, "Bluetooth device name", NULL, Format_String, "x(32)", NULL, "32", Setting_NonCore, hc05_settings.device_name, NULL, NULL, false },
-    { Setting_BlueToothStateInput, Group_AuxPorts, "Bluetooth state port", NULL, Format_Int8, "#0", "0", max_port, Setting_NonCore, &hc05_settings.state_port, NULL, is_setting_available, true },
+    { Setting_BlueToothInitOK, Group_Bluetooth, "HC-05 init ok", NULL, Format_Bool, NULL, NULL, NULL, Setting_NonCoreFn, set_options, get_options, NULL },
+    { Setting_BlueToothDeviceName, Group_Bluetooth, "Bluetooth device name", NULL, Format_String, "x(32)", NULL, "32", Setting_NonCore, hc05_settings.device_name, NULL, NULL },
+    { Setting_BlueToothStateInput, Group_AuxPorts, "Bluetooth state port", NULL, Format_Int8, "#0", "0", max_port, Setting_NonCore, &hc05_settings.state_port, NULL, is_setting_available, { .reboot_required = On } },
 };
 
 #ifndef NO_SETTINGS_DESCRIPTIONS
