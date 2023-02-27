@@ -4,7 +4,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2021-2022 Terje Io
+  Copyright (c) 2021-2023 Terje Io
 
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -73,7 +73,7 @@ static void on_connect (uint8_t port, bool state)
 
 static void connected (sys_state_t state)
 {
-    report_init_message();
+    grbl.report.init_message();
 }
 
 void select_stream (sys_state_t state)
