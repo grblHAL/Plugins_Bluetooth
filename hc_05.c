@@ -21,6 +21,10 @@
 
 */
 
+#include "driver.h"
+
+#if BLUETOOTH_ENABLE == 2
+
 #include <string.h>
 
 #ifdef ARDUINO
@@ -350,3 +354,5 @@ bool bluetooth_init (void)
 
     return ok;
 }
+
+#endif
