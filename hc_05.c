@@ -55,27 +55,26 @@ typedef struct {
 
 static uint8_t state_port;
 static uint32_t timeout;
+static bool connected = false;
 static on_report_options_ptr on_report_options;
 static nvs_address_t nvs_address;
 static io_stream_t bt_stream;
 static hc05_settings_t hc05_settings;
-
-static void hc05_settings_restore (void);
-static void hc05_settings_load (void);
-static void hc05_settings_save (void);
-static void select_stream (void *data);
 static uint8_t n_ports;
 static char max_port[4];
 
+static void select_stream (void *data);
+static void hc05_settings_save (void);
+
 static void on_connect (uint8_t port, bool state)
 {
-    if((bt_stream.state.connected = state))
+    if((connected = state))
         select_stream(NULL);
     else if(hal.stream.type == StreamType_Bluetooth)
         stream_disconnect(&bt_stream);
 }
 
-static void connected (void *data)
+static void connected_msg (void *data)
 {
     grbl.report.init_message();
 }
@@ -93,7 +92,7 @@ void select_stream (void *data)
         }
     }
 
-    protocol_enqueue_foreground_task(connected, NULL);
+    protocol_enqueue_foreground_task(connected_msg, NULL);
 }
 
 static bool send_command (char *command)
@@ -225,20 +224,6 @@ static const setting_descr_t bluetooth_settings_descr[] = {
 
 #endif
 
-static setting_details_t setting_details = {
-    .groups = bluetooth_groups,
-    .n_groups = sizeof(bluetooth_groups) / sizeof(setting_group_detail_t),
-    .settings = bluetooth_settings,
-    .n_settings = sizeof(bluetooth_settings) / sizeof(setting_detail_t),
-#ifndef NO_SETTINGS_DESCRIPTIONS
-    .descriptions = bluetooth_settings_descr,
-    .n_descriptions = sizeof(bluetooth_settings_descr) / sizeof(setting_descr_t),
-#endif
-    .save = hc05_settings_save,
-    .load = hc05_settings_load,
-    .restore = hc05_settings_restore,
-};
-
 static void hc05_settings_save (void)
 {
     hal.nvs.memcpy_to_nvs(nvs_address, (uint8_t *)&hc05_settings, sizeof(hc05_settings_t), true);
@@ -292,12 +277,31 @@ static void hc05_settings_load (void)
         protocol_enqueue_foreground_task(report_warning, "Bluetooth plugin failed to initialize, no pin for STATE signal!");
 }
 
+static setting_details_t setting_details = {
+    .groups = bluetooth_groups,
+    .n_groups = sizeof(bluetooth_groups) / sizeof(setting_group_detail_t),
+    .settings = bluetooth_settings,
+    .n_settings = sizeof(bluetooth_settings) / sizeof(setting_detail_t),
+#ifndef NO_SETTINGS_DESCRIPTIONS
+    .descriptions = bluetooth_settings_descr,
+    .n_descriptions = sizeof(bluetooth_settings_descr) / sizeof(setting_descr_t),
+#endif
+    .save = hc05_settings_save,
+    .load = hc05_settings_load,
+    .restore = hc05_settings_restore,
+};
+
+static bool is_connected (void)
+{
+    return connected;
+}
+
 static void report_options (bool newopt)
 {
     on_report_options(newopt);
 
     if(!newopt)
-        hal.stream.write("[PLUGIN:Bluetooth HC-05 v0.09]" ASCII_EOL);
+        report_plugin("Bluetooth HC-05", "0.10");
 }
 
 bool bluetooth_init (void)
@@ -308,6 +312,7 @@ bool bluetooth_init (void)
     if((ok = stream != NULL)) {
         memcpy(&bt_stream, stream, sizeof(io_stream_t));
         bt_stream.type = StreamType_Bluetooth;
+        bt_stream.is_connected = is_connected;
     }
 
     if(ok) {
