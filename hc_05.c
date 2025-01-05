@@ -4,7 +4,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2021-2024 Terje Io
+  Copyright (c) 2021-2025 Terje Io
 
   grblHAL is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -74,11 +74,6 @@ static void on_connect (uint8_t port, bool state)
         stream_disconnect(&bt_stream);
 }
 
-static void connected_msg (void *data)
-{
-    grbl.report.init_message();
-}
-
 void select_stream (void *data)
 {
     if(hc05_settings.options.enable) {
@@ -91,8 +86,6 @@ void select_stream (void *data)
             stream_connect(&bt_stream);
         }
     }
-
-    protocol_enqueue_foreground_task(connected_msg, NULL);
 }
 
 static bool send_command (char *command)
@@ -277,20 +270,6 @@ static void hc05_settings_load (void)
         protocol_enqueue_foreground_task(report_warning, "Bluetooth plugin failed to initialize, no pin for STATE signal!");
 }
 
-static setting_details_t setting_details = {
-    .groups = bluetooth_groups,
-    .n_groups = sizeof(bluetooth_groups) / sizeof(setting_group_detail_t),
-    .settings = bluetooth_settings,
-    .n_settings = sizeof(bluetooth_settings) / sizeof(setting_detail_t),
-#ifndef NO_SETTINGS_DESCRIPTIONS
-    .descriptions = bluetooth_settings_descr,
-    .n_descriptions = sizeof(bluetooth_settings_descr) / sizeof(setting_descr_t),
-#endif
-    .save = hc05_settings_save,
-    .load = hc05_settings_load,
-    .restore = hc05_settings_restore,
-};
-
 static bool is_connected (void)
 {
     return connected;
@@ -301,11 +280,25 @@ static void report_options (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        report_plugin("Bluetooth HC-05", "0.10");
+        report_plugin("Bluetooth HC-05", "0.11");
 }
 
 bool bluetooth_init (void)
 {
+    static setting_details_t setting_details = {
+        .groups = bluetooth_groups,
+        .n_groups = sizeof(bluetooth_groups) / sizeof(setting_group_detail_t),
+        .settings = bluetooth_settings,
+        .n_settings = sizeof(bluetooth_settings) / sizeof(setting_detail_t),
+    #ifndef NO_SETTINGS_DESCRIPTIONS
+        .descriptions = bluetooth_settings_descr,
+        .n_descriptions = sizeof(bluetooth_settings_descr) / sizeof(setting_descr_t),
+    #endif
+        .save = hc05_settings_save,
+        .load = hc05_settings_load,
+        .restore = hc05_settings_restore,
+    };
+
     bool ok;
     io_stream_t const *stream = stream_open_instance(255, 115200, NULL, "Bluetooth"); // open first free serial port
 
