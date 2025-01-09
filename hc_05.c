@@ -217,6 +217,13 @@ static const setting_descr_t bluetooth_settings_descr[] = {
 
 #endif
 
+static bool get_port (xbar_t *properties, uint8_t port, void *data)
+{
+    *(uint8_t *)data = port;
+
+    return true;
+}
+
 static void hc05_settings_save (void)
 {
     hal.nvs.memcpy_to_nvs(nvs_address, (uint8_t *)&hc05_settings, sizeof(hc05_settings_t), true);
@@ -224,27 +231,12 @@ static void hc05_settings_save (void)
 
 static void hc05_settings_restore (void)
 {
+    hc05_settings.state_port = n_ports ? n_ports - 1 : 0;
     hc05_settings.options.enable = false;
     strcpy(hc05_settings.device_name, "grblHAL");
 
-    if(ioport_can_claim_explicit()) {
-
-        xbar_t *portinfo;
-        uint8_t port = n_ports;
-
-        hc05_settings.state_port = 0;
-
-        // Find highest numbered port that supports change interrupt.
-        if(port > 0) do {
-            port--;
-            if((portinfo = hal.port.get_pin_info(Port_Digital, Port_Input, port))) {
-                if(!portinfo->mode.claimed && (portinfo->cap.irq_mode & IRQ_Mode_Change)) {
-                    hc05_settings.state_port = port;
-                    break;
-                }
-            }
-        } while(port);
-    }
+    // Find highest numbered port that supports change interrupt.
+    ioports_enumerate(Port_Digital, Port_Input, (pin_cap_t){ .irq_mode = IRQ_Mode_Change, .claimable = On }, get_port, (void *)&hc05_settings.state_port);
 
     hc05_settings_save();
 }
@@ -262,7 +254,7 @@ static void hc05_settings_load (void)
 
     state_port = hc05_settings.state_port;
 
-    xbar_t *portinfo = hal.port.get_pin_info(Port_Digital, Port_Input, state_port);
+    xbar_t *portinfo = ioport_get_info(Port_Digital, Port_Input, state_port);
 
     if(portinfo && !portinfo->mode.claimed && (portinfo->cap.irq_mode & IRQ_Mode_Change) && ioport_claim(Port_Digital, Port_Input, &state_port, "HC-05 STATE"))
         protocol_enqueue_foreground_task(hc05_setup, NULL);
@@ -280,7 +272,7 @@ static void report_options (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        report_plugin("Bluetooth HC-05", "0.11");
+        report_plugin("Bluetooth HC-05", "0.12");
 }
 
 bool bluetooth_init (void)
