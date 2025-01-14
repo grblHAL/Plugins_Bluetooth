@@ -60,7 +60,7 @@ static on_report_options_ptr on_report_options;
 static nvs_address_t nvs_address;
 static io_stream_t bt_stream;
 static hc05_settings_t hc05_settings;
-static uint8_t n_ports;
+static uint8_t n_ports = 0;
 static char max_port[4];
 
 static void select_stream (void *data);
@@ -192,9 +192,24 @@ static uint32_t get_options (setting_id_t id)
     return hc05_settings.options.value;
 }
 
-static bool is_setting_available (const setting_detail_t *setting)
+static status_code_t set_port (setting_id_t setting, float value)
 {
-    return setting->id == Setting_BlueToothStateInput && ioport_can_claim_explicit();
+    if(!isintf(value))
+        return Status_BadNumberFormat;
+
+    hc05_settings.state_port = value < 0.0f ? 255 : (uint8_t)value;
+
+    return Status_OK;
+}
+
+static float get_port (setting_id_t setting)
+{
+    return hc05_settings.state_port >= n_ports ? -1.0f : (float)hc05_settings.state_port;
+}
+
+static bool is_setting_available (const setting_detail_t *setting, uint_fast16_t offset)
+{
+    return n_ports > 0;
 }
 
 static const setting_group_detail_t bluetooth_groups [] = {
@@ -204,7 +219,7 @@ static const setting_group_detail_t bluetooth_groups [] = {
 static const setting_detail_t bluetooth_settings[] = {
     { Setting_BlueToothInitOK, Group_Bluetooth, "HC-05 init ok", NULL, Format_Bool, NULL, NULL, NULL, Setting_NonCoreFn, set_options, get_options, NULL },
     { Setting_BlueToothDeviceName, Group_Bluetooth, "Bluetooth device name", NULL, Format_String, "x(32)", NULL, "32", Setting_NonCore, hc05_settings.device_name, NULL, NULL },
-    { Setting_BlueToothStateInput, Group_AuxPorts, "Bluetooth state port", NULL, Format_Int8, "#0", "0", max_port, Setting_NonCore, &hc05_settings.state_port, NULL, is_setting_available, { .reboot_required = On } },
+    { Setting_BlueToothStateInput, Group_AuxPorts, "Bluetooth state port", NULL, Format_Decimal, "-#0", "-1", max_port, Setting_NonCoreFn, set_port, get_port, is_setting_available, { .reboot_required = On } },
 };
 
 #ifndef NO_SETTINGS_DESCRIPTIONS
@@ -212,12 +227,12 @@ static const setting_detail_t bluetooth_settings[] = {
 static const setting_descr_t bluetooth_settings_descr[] = {
     { Setting_BlueToothInitOK,     "Uncheck to enter autoconfig mode on startup when AT-mode button is pressed." },
     { Setting_BlueToothDeviceName, "Bluetooth device name." },
-    { Setting_BlueToothStateInput, "Aux port number to use for the STATE pin input." },
+    { Setting_BlueToothStateInput, "Aux port number to use for the STATE pin input. Set to -1 to disable." },
 };
 
 #endif
 
-static bool get_port (xbar_t *properties, uint8_t port, void *data)
+static bool find_port (xbar_t *properties, uint8_t port, void *data)
 {
     *(uint8_t *)data = port;
 
@@ -231,12 +246,12 @@ static void hc05_settings_save (void)
 
 static void hc05_settings_restore (void)
 {
-    hc05_settings.state_port = n_ports ? n_ports - 1 : 0;
+    hc05_settings.state_port = n_ports ? n_ports - 1 : 0xFF;
     hc05_settings.options.enable = false;
     strcpy(hc05_settings.device_name, "grblHAL");
 
     // Find highest numbered port that supports change interrupt.
-    ioports_enumerate(Port_Digital, Port_Input, (pin_cap_t){ .irq_mode = IRQ_Mode_Change, .claimable = On }, get_port, (void *)&hc05_settings.state_port);
+    ioports_enumerate(Port_Digital, Port_Input, (pin_cap_t){ .irq_mode = IRQ_Mode_Change, .claimable = On }, find_port, (void *)&hc05_settings.state_port);
 
     hc05_settings_save();
 }
@@ -246,20 +261,21 @@ static void hc05_settings_load (void)
     if(hal.nvs.memcpy_from_nvs((uint8_t *)&hc05_settings, nvs_address, sizeof(hc05_settings_t), true) != NVS_TransferResult_OK)
         hc05_settings_restore();
 
-    if(hc05_settings.state_port >= n_ports)
-        hc05_settings.state_port = n_ports - 1;
+    if(hc05_settings.state_port != 0xFF && hc05_settings.state_port >= n_ports) // Find highest numbered port that supports change interrupt.
+        ioports_enumerate(Port_Digital, Port_Input, (pin_cap_t){ .irq_mode = IRQ_Mode_Change, .claimable = On }, find_port, (void *)&hc05_settings.state_port);
 
     if(*hc05_settings.device_name == '\0')
         strcpy(hc05_settings.device_name, "grblHAL");
 
-    state_port = hc05_settings.state_port;
+    if((state_port = hc05_settings.state_port) != 0xFF) {
 
-    xbar_t *portinfo = ioport_get_info(Port_Digital, Port_Input, state_port);
+        xbar_t *portinfo = ioport_get_info(Port_Digital, Port_Input, state_port);
 
-    if(portinfo && !portinfo->mode.claimed && (portinfo->cap.irq_mode & IRQ_Mode_Change) && ioport_claim(Port_Digital, Port_Input, &state_port, "HC-05 STATE"))
-        protocol_enqueue_foreground_task(hc05_setup, NULL);
-    else
-        protocol_enqueue_foreground_task(report_warning, "Bluetooth plugin failed to initialize, no pin for STATE signal!");
+        if(portinfo && !portinfo->mode.claimed && (portinfo->cap.irq_mode & IRQ_Mode_Change) && ioport_claim(Port_Digital, Port_Input, &state_port, "HC-05 STATE"))
+            protocol_enqueue_foreground_task(hc05_setup, NULL);
+        else
+            protocol_enqueue_foreground_task(report_warning, "Bluetooth plugin failed to initialize, no pin for STATE signal!");
+    }
 }
 
 static bool is_connected (void)
@@ -272,10 +288,10 @@ static void report_options (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        report_plugin("Bluetooth HC-05", "0.12");
+        report_plugin("Bluetooth HC-05", "0.13");
 }
 
-bool bluetooth_init (void)
+void bluetooth_init (void)
 {
     static setting_details_t setting_details = {
         .groups = bluetooth_groups,
@@ -291,28 +307,20 @@ bool bluetooth_init (void)
         .restore = hc05_settings_restore,
     };
 
-    bool ok;
-    io_stream_t const *stream = stream_open_instance(255, 115200, NULL, "Bluetooth"); // open first free serial port
+    const io_stream_t *stream;
 
-    if((ok = stream != NULL)) {
+    // open first free serial port
+    if((stream = stream_open_instance(255, 115200, NULL, "Bluetooth"))) {
+
         memcpy(&bt_stream, stream, sizeof(io_stream_t));
         bt_stream.type = StreamType_Bluetooth;
         bt_stream.is_connected = is_connected;
-    }
 
-    if(ok) {
+        if(ioport_can_claim_explicit() &&
+            (n_ports = ioports_available(Port_Digital, Port_Input)) > 0 &&
+              (nvs_address = nvs_alloc(sizeof(hc05_settings_t)))) {
 
-        if(!ioport_can_claim_explicit()) {
-
-            // Driver does not support explicit pin claiming, claim the highest numbered port instead.
-
-            if((ok = (n_ports = hal.port.num_digital_in) > 0 && (nvs_address = nvs_alloc(sizeof(hc05_settings_t)))))
-                hc05_settings.state_port = --hal.port.num_digital_in;
-
-        } else if((ok = (n_ports = ioports_available(Port_Digital, Port_Input)) > 0 && (nvs_address = nvs_alloc(sizeof(hc05_settings_t)))))
             strcpy(max_port, uitoa(n_ports - 1));
-
-        if(ok) {
 
             on_report_options = grbl.on_report_options;
             grbl.on_report_options = report_options;
@@ -324,8 +332,6 @@ bool bluetooth_init (void)
 
     } else
         protocol_enqueue_foreground_task(report_warning, "Bluetooth plugin failed to initialize, no serial stream available!");
-
-    return ok;
 }
 
 #endif
