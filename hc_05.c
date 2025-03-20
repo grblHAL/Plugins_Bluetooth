@@ -27,17 +27,10 @@
 
 #include <string.h>
 
-#ifdef ARDUINO
-#include "../grbl/hal.h"
-#include "../grbl/protocol.h"
-#include "../grbl/state_machine.h"
-#include "../grbl/nvs_buffer.h"
-#else
 #include "grbl/hal.h"
 #include "grbl/protocol.h"
 #include "grbl/state_machine.h"
 #include "grbl/nvs_buffer.h"
-#endif
 
 typedef union {
     uint8_t value;
@@ -197,7 +190,7 @@ static status_code_t set_port (setting_id_t setting, float value)
     if(!isintf(value))
         return Status_BadNumberFormat;
 
-    hc05_settings.state_port = value < 0.0f ? 255 : (uint8_t)value;
+    hc05_settings.state_port = value < 0.0f ? IOPORT_UNASSIGNED : (uint8_t)value;
 
     return Status_OK;
 }
@@ -232,13 +225,6 @@ static const setting_descr_t bluetooth_settings_descr[] = {
 
 #endif
 
-static bool find_port (xbar_t *properties, uint8_t port, void *data)
-{
-    *(uint8_t *)data = port;
-
-    return true;
-}
-
 static void hc05_settings_save (void)
 {
     hal.nvs.memcpy_to_nvs(nvs_address, (uint8_t *)&hc05_settings, sizeof(hc05_settings_t), true);
@@ -246,12 +232,9 @@ static void hc05_settings_save (void)
 
 static void hc05_settings_restore (void)
 {
-    hc05_settings.state_port = n_ports ? n_ports - 1 : 0xFF;
     hc05_settings.options.enable = false;
     strcpy(hc05_settings.device_name, "grblHAL");
-
-    // Find highest numbered port that supports change interrupt.
-    ioports_enumerate(Port_Digital, Port_Input, (pin_cap_t){ .irq_mode = IRQ_Mode_Change, .claimable = On }, find_port, (void *)&hc05_settings.state_port);
+    hc05_settings.state_port = ioport_find_free(Port_Digital, Port_Input, (pin_cap_t){ .irq_mode = IRQ_Mode_Change, .claimable = On }, "HC-05 STATE");
 
     hc05_settings_save();
 }
@@ -261,8 +244,9 @@ static void hc05_settings_load (void)
     if(hal.nvs.memcpy_from_nvs((uint8_t *)&hc05_settings, nvs_address, sizeof(hc05_settings_t), true) != NVS_TransferResult_OK)
         hc05_settings_restore();
 
-    if(hc05_settings.state_port != 0xFF && hc05_settings.state_port >= n_ports) // Find highest numbered port that supports change interrupt.
-        ioports_enumerate(Port_Digital, Port_Input, (pin_cap_t){ .irq_mode = IRQ_Mode_Change, .claimable = On }, find_port, (void *)&hc05_settings.state_port);
+    // Sanity check
+    if(hc05_settings.state_port >= n_ports)
+        hc05_settings.state_port = 0xFF;
 
     if(*hc05_settings.device_name == '\0')
         strcpy(hc05_settings.device_name, "grblHAL");
@@ -334,4 +318,4 @@ void bluetooth_init (void)
         protocol_enqueue_foreground_task(report_warning, "Bluetooth plugin failed to initialize, no serial stream available!");
 }
 
-#endif
+#endif // BLUETOOTH_ENABLE
