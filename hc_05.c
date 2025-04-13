@@ -155,12 +155,12 @@ static void auto_config (void *data)
 
 static void hc05_setup (void *data)
 {
-    bool is_connected = (hal.port.wait_on_input(true, state_port, WaitMode_Immediate, 0.0f) == 1);
+    bool is_connected = (ioport_wait_on_input(true, state_port, WaitMode_Immediate, 0.0f) == 1);
 
     if(!hc05_settings.options.enable && !is_connected)
         protocol_enqueue_foreground_task(auto_config, NULL);
     else {
-        hal.port.register_interrupt_handler(state_port, IRQ_Mode_Change, on_connect);
+        ioport_enable_irq(state_port, IRQ_Mode_Change, on_connect);
         if(is_connected)
             protocol_enqueue_foreground_task(select_stream, NULL);
     }
@@ -173,7 +173,7 @@ static status_code_t set_options (setting_id_t id, uint_fast16_t int_value)
     opt.value = int_value;
 
     if(hc05_settings.options.enable != opt.enable && opt.enable)
-        hal.port.register_interrupt_handler(state_port, IRQ_Mode_Change, on_connect);
+        ioport_enable_irq(state_port, IRQ_Mode_Change, on_connect);
 
     hc05_settings.options.value = opt.value;
 
@@ -272,7 +272,7 @@ static void report_options (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        report_plugin("Bluetooth HC-05", "0.13");
+        report_plugin("Bluetooth HC-05", "0.14");
 }
 
 void bluetooth_init (void)
