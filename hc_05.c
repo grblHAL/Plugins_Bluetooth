@@ -31,6 +31,7 @@
 #include "grbl/protocol.h"
 #include "grbl/state_machine.h"
 #include "grbl/nvs_buffer.h"
+#include "grbl/task.h"
 
 typedef union {
     uint8_t value;
@@ -158,11 +159,11 @@ static void hc05_setup (void *data)
     bool is_connected = (ioport_wait_on_input(true, state_port, WaitMode_Immediate, 0.0f) == 1);
 
     if(!hc05_settings.options.enable && !is_connected)
-        protocol_enqueue_foreground_task(auto_config, NULL);
+        task_add_immediate(auto_config, NULL);
     else {
         ioport_enable_irq(state_port, IRQ_Mode_Change, on_connect);
         if(is_connected)
-            protocol_enqueue_foreground_task(select_stream, NULL);
+            task_add_immediate(select_stream, NULL);
     }
 }
 
@@ -256,9 +257,9 @@ static void hc05_settings_load (void)
         xbar_t *portinfo = ioport_get_info(Port_Digital, Port_Input, state_port);
 
         if(portinfo && !portinfo->mode.claimed && (portinfo->cap.irq_mode & IRQ_Mode_Change) && ioport_claim(Port_Digital, Port_Input, &state_port, "HC-05 STATE"))
-            protocol_enqueue_foreground_task(hc05_setup, NULL);
+            task_add_immediate(hc05_setup, NULL);
         else
-            protocol_enqueue_foreground_task(report_warning, "Bluetooth plugin failed to initialize, no pin for STATE signal!");
+            task_add_immediate(report_warning, "Bluetooth plugin failed to initialize, no pin for STATE signal!");
     }
 }
 
@@ -272,7 +273,7 @@ static void report_options (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        report_plugin("Bluetooth HC-05", "0.14");
+        report_plugin("Bluetooth HC-05", "0.15");
 }
 
 void bluetooth_init (void)
@@ -312,10 +313,10 @@ void bluetooth_init (void)
             settings_register(&setting_details);
 
         } else
-            protocol_enqueue_foreground_task(report_warning, "Bluetooth plugin failed to initialize, no pin for STATE signal!");
+            task_run_on_startup(report_warning, "Bluetooth plugin failed to initialize, no pin for STATE signal!");
 
     } else
-        protocol_enqueue_foreground_task(report_warning, "Bluetooth plugin failed to initialize, no serial stream available!");
+        task_run_on_startup(report_warning, "Bluetooth plugin failed to initialize, no serial stream available!");
 }
 
 #endif // BLUETOOTH_ENABLE
