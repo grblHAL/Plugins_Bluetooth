@@ -41,8 +41,11 @@ __NOTE:__ This is a preview version.
 
 ---
 
-Available for some board maps for the [iMXRT1062](https://github.com/grblHAL/iMXRT1062) \(Teensy 4.1\), [STM32F4xx](https://github.com/grblHAL/STM32F4xx), [STM32F7xx](https://github.com/grblHAL/STM32F7xx) and [SAM3X8E](https://github.com/grblHAL/SAM3X8E) \(Arduino Due\) drivers.  
-Support for further drivers may be added on request.
+Dependencies: a UART port and a free, interrupt capable \(`A`, `C` or `E` mode\), auxiliary input port.
+
+Tip: Use the `$pins` and `$pinstate` [commands](https://github.com/grblHAL/core/wiki/Report-extensions#pins) to output information about UART ports and auxiliary pins to the console.
+
+
 
 ---
 2022-07-19
