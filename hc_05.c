@@ -196,25 +196,21 @@ static float get_port (setting_id_t setting)
     return d_in.get_value(&d_in, hc05_settings.state_port);
 }
 
-static const setting_group_detail_t bluetooth_groups [] = {
+PROGMEM static const setting_group_detail_t bluetooth_groups [] = {
     { Group_Root, Group_Bluetooth, "Bluetooth"}
 };
 
-static const setting_detail_t bluetooth_settings[] = {
+PROGMEM static const setting_detail_t bluetooth_settings[] = {
     { Setting_BlueToothInitOK, Group_Bluetooth, "HC-05 init ok", NULL, Format_Bool, NULL, NULL, NULL, Setting_NonCoreFn, set_options, get_options, NULL },
     { Setting_BlueToothDeviceName, Group_Bluetooth, "Bluetooth device name", NULL, Format_String, "x(32)", NULL, "32", Setting_NonCore, hc05_settings.device_name, NULL, NULL },
     { Setting_BlueToothStateInput, Group_AuxPorts, "Bluetooth state port", NULL, Format_Decimal, "-#0", "-1",  d_in.port_maxs, Setting_NonCoreFn, set_port, get_port, NULL, { .reboot_required = On } },
 };
 
-#ifndef NO_SETTINGS_DESCRIPTIONS
-
-static const setting_descr_t bluetooth_settings_descr[] = {
+PROGMEM static const setting_descr_t bluetooth_settings_descr[] = {
     { Setting_BlueToothInitOK,     "Uncheck to enter autoconfig mode on startup when AT-mode button is pressed." },
     { Setting_BlueToothDeviceName, "Bluetooth device name." },
     { Setting_BlueToothStateInput, "Aux port number to use for the STATE pin input. Set to -1 to disable." },
 };
-
-#endif
 
 static void hc05_settings_save (void)
 {
@@ -271,10 +267,8 @@ void bluetooth_init (void)
         .n_groups = sizeof(bluetooth_groups) / sizeof(setting_group_detail_t),
         .settings = bluetooth_settings,
         .n_settings = sizeof(bluetooth_settings) / sizeof(setting_detail_t),
-    #ifndef NO_SETTINGS_DESCRIPTIONS
         .descriptions = bluetooth_settings_descr,
         .n_descriptions = sizeof(bluetooth_settings_descr) / sizeof(setting_descr_t),
-    #endif
         .save = hc05_settings_save,
         .load = hc05_settings_load,
         .restore = hc05_settings_restore,
