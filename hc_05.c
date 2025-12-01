@@ -33,6 +33,10 @@
 #include "grbl/nvs_buffer.h"
 #include "grbl/task.h"
 
+#if BLUETOOTH_STREAM != 255 && defined(MPG_STREAM) && MPG_STREAM == BLUETOOTH_STREAM
+#define BT_MPG
+#endif
+
 typedef union {
     uint8_t value;
     struct {
@@ -57,16 +61,36 @@ static io_port_cfg_t d_in;
 
 static on_report_options_ptr on_report_options;
 
-static void select_stream (void *data);
 static void hc05_settings_save (void);
+
+static bool is_connected (void)
+{
+    return connected;
+}
+
+#ifdef BT_MPG
+
+static on_mpg_registered_ptr on_mpg_registered;
+
+void onMPGRegistered (io_stream_t *stream, bool tx_capable)
+{
+    if(tx_capable && stream->instance == BLUETOOTH_STREAM) {
+        memcpy(&bt_stream, stream, sizeof(io_stream_t));
+        bt_stream.type = StreamType_Bluetooth;
+        bt_stream.is_connected = is_connected;
+    }
+
+    if(on_mpg_registered)
+        on_mpg_registered(stream, tx_capable);
+}
 
 static void on_connect (uint8_t port, bool state)
 {
-    if((connected = state))
-        select_stream(NULL);
-    else if(hal.stream.type == StreamType_Bluetooth)
-        stream_disconnect(&bt_stream);
+    if(!(connected = state) && hal.stream.type == StreamType_MPG && hal.stream.read == bt_stream.read)
+        stream_mpg_enable(false);    
 }
+
+#else
 
 void select_stream (void *data)
 {
@@ -81,6 +105,16 @@ void select_stream (void *data)
         }
     }
 }
+
+static void on_connect (uint8_t port, bool state)
+{
+    if((connected = state))
+        select_stream(NULL);
+    else if(hal.stream.type == StreamType_Bluetooth)
+        stream_disconnect(&bt_stream);
+}
+
+#endif
 
 static bool send_command (char *command)
 {
@@ -162,8 +196,10 @@ static void hc05_setup (void *data)
         task_add_immediate(auto_config, NULL);
     else {
         ioport_enable_irq(state_port, IRQ_Mode_Change, on_connect);
-        if(is_connected)
-            task_add_immediate(select_stream, NULL);
+#ifndef BT_MPG
+    if(is_connected)
+        task_add_immediate(select_stream, NULL);
+#endif
     }
 }
 
@@ -238,8 +274,9 @@ static void hc05_settings_load (void)
     if(*hc05_settings.device_name == '\0')
         strcpy(hc05_settings.device_name, "grblHAL");
 
-    if((state_port = hc05_settings.state_port) != IOPORT_UNASSIGNED) {
-
+    if(bt_stream.type != StreamType_Bluetooth)
+        task_add_immediate(report_warning, "Bluetooth plugin failed to initialize, no stream!");
+    else if((state_port = hc05_settings.state_port) != IOPORT_UNASSIGNED) {
         if(d_in.claim(&d_in, &state_port, "HC-05 STATE", (pin_cap_t){ .irq_mode = IRQ_Mode_Change }))
             task_add_immediate(hc05_setup, NULL);
         else
@@ -247,17 +284,12 @@ static void hc05_settings_load (void)
     }
 }
 
-static bool is_connected (void)
-{
-    return connected;
-}
-
 static void report_options (bool newopt)
 {
     on_report_options(newopt);
 
     if(!newopt)
-        report_plugin("Bluetooth HC-05", "0.16");
+        report_plugin("Bluetooth HC-05", "0.17");
 }
 
 void bluetooth_init (void)
@@ -274,16 +306,33 @@ void bluetooth_init (void)
         .restore = hc05_settings_restore,
     };
 
+    bool ok;
+
+#ifdef BT_MPG
+
+    bt_stream.type = StreamType_Null;
+    if((ok = ioports_cfg(&d_in, Port_Digital, Port_Input)->n_ports &&
+              (nvs_address = nvs_alloc(sizeof(hc05_settings_t))))) {
+        on_mpg_registered = grbl.on_mpg_registered;
+        grbl.on_mpg_registered = onMPGRegistered;
+    }
+
+#else
+
     const io_stream_t *stream;
 
-    // open first free serial port
-    if(ioports_cfg(&d_in, Port_Digital, Port_Input)->n_ports &&
-        (stream = stream_open_instance(255, 115200, NULL, "Bluetooth")) &&
-         (nvs_address = nvs_alloc(sizeof(hc05_settings_t)))) {
+    if((ok = ioports_cfg(&d_in, Port_Digital, Port_Input)->n_ports &&
+        (stream = stream_open_instance(BLUETOOTH_STREAM, 115200, NULL, "Bluetooth")) &&
+         (nvs_address = nvs_alloc(sizeof(hc05_settings_t))))) {
 
         memcpy(&bt_stream, stream, sizeof(io_stream_t));
         bt_stream.type = StreamType_Bluetooth;
         bt_stream.is_connected = is_connected;
+    }
+
+#endif
+
+    if(ok) {
 
         on_report_options = grbl.on_report_options;
         grbl.on_report_options = report_options;
