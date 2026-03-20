@@ -4,7 +4,7 @@
 
   Part of grblHAL
 
-  Copyright (c) 2021-2025 Terje Io
+  Copyright (c) 2021-2026 Terje Io
 
   grblHAL is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -173,7 +173,7 @@ static void auto_config (void *data)
         ok = ok && send_command("AT+POLAR=1,1" ASCII_EOL);
     }
 
-    memcpy(&hal.stream, &active_stream, sizeof(io_stream_t));   // Restore current stream pointers.
+    memcpy(&hal.stream, &active_stream, offsetof(io_stream_t, report));   // Restore current stream pointers.
     hal.stream.set_enqueue_rt_handler(prev_handler);
 
     bt_stream.set_baud_rate(115200);
@@ -289,7 +289,7 @@ static void report_options (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        report_plugin("Bluetooth HC-05", "0.17");
+        report_plugin("Bluetooth HC-05", "0.18");
 }
 
 void bluetooth_init (void)
