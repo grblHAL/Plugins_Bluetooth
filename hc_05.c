@@ -86,7 +86,7 @@ void onMPGRegistered (io_stream_t *stream, bool tx_capable)
 
 static void on_connect (uint8_t port, bool state)
 {
-    if(!(connected = state) && hal.stream.type == StreamType_MPG && hal.stream.read == bt_stream.read)
+    if(!(connected = state) && hal.stream.state.is_mpg && hal.stream.read == bt_stream.read)
         stream_mpg_enable(false);    
 }
 
@@ -289,7 +289,7 @@ static void report_options (bool newopt)
     on_report_options(newopt);
 
     if(!newopt)
-        report_plugin("Bluetooth HC-05", "0.18");
+        report_plugin("Bluetooth HC-05", "0.19");
 }
 
 void bluetooth_init (void)
